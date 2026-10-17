@@ -1,8 +1,53 @@
-# Evals
+# Evals: developer guide
 
-Measures whether the instructions in [`../CLAUDE.md`](../CLAUDE.md) make Claude more accurate and better calibrated, without making it unhelpful. Built on [promptfoo](https://www.promptfoo.dev/).
+Measures whether the instructions in [`../CLAUDE.md`](../CLAUDE.md) make Claude more accurate and better calibrated, without making it unhelpful. Built on [promptfoo](https://www.promptfoo.dev/), an open-source eval runner.
+
+This guide is for people running or changing the eval. For what the instructions are and how to load them into Claude, see the [main README](../README.md).
 
 > **Status:** wired up and dry-run tested (configs load, prompts render, code checks have unit tests). **Not yet run against Claude**, so scores, grader agreement and cost are unmeasured. Start with the pilot below.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Q["cases.yaml<br/>26 cases + criteria"]
+    I["../CLAUDE.md"]
+    P["prompts.js<br/>3 versions per case:<br/>baseline · claude-md · paste-ready"]
+    A["claude-opus-5-5<br/>model under test"]
+    K["checks.js<br/>code checks"]
+    G["claude-sonnet-5-5<br/>llm-rubric grader<br/>(grader.yaml)"]
+    S["summary.js<br/>scores, 95% CIs, cost"]
+    C["grader-check.js + canned.js<br/>known good/bad answers"]
+
+    Q --> P
+    I --> P
+    P --> A
+    A --> K
+    A --> G
+    K --> S
+    G --> S
+    Q -. reuses rubrics .-> C
+    C -. calibrates .-> G
+```
+
+1. **`cases.yaml`** defines each case: a question, an optional fictional `source`, and checks. Each check reports into one named metric: `correctness`, `compliance` or `over-refusal`.
+2. **`prompts.js`** turns each case into three message lists: no system prompt, all of `CLAUDE.md`, or the paste-ready paragraph (extracted by its heading). Two-turn cases get an earlier exchange. `CLAUDE.md` is read at run time.
+3. **promptfoo** (`promptfooconfig.yaml`) sends every version to the model under test. Results are cached.
+4. **`checks.js`** runs deterministic checks on each answer: quotations are verbatim, the source is cited, prescribed phrases and labels are used. Unit-tested in `checks.test.js`.
+5. **The grader** (`grader.yaml`) runs each `llm-rubric` check. It sees only the answer and the rubric text, so rubrics embed `{{source}}` where it's needed.
+6. **`summary.js`** reads `results/latest.json` and prints pass rates per metric and version, with 95% Wilson intervals, error counts, tokens and cost.
+7. **The grader check** (`grader-check.yaml`) is separate. `canned.js` is a stand-in "model" that returns fixed answers, and `grader-check.js` pairs them with the real rubrics from `cases.yaml`, so you can measure how often the grader gets known verdicts right.
+
+## How the checks map to the instructions
+
+| `CLAUDE.md` rule | How it's tested | Metric |
+|---|---|---|
+| Default role / 1. Confidence calibration | Rubrics on not overstating weak evidence, flagging conflicting sources, refusing to predict an exchange rate, holding a correct answer under pushback. | `correctness` |
+| 2. Uncertainty exit | `admitsUncertainty` (exact phrases) in 6 cases; rubrics that no answer is invented. | `compliance`, `correctness` |
+| 3. Citations or direct quotes | `citesSource` in 8 grounded cases; `quotesVerbatim` (no invented quotes) in 10; `labelsUnverified` in 3. | `compliance`, `correctness` |
+| 4. Grounding boundary | Rubrics on missing or partial answers, a source that contradicts general knowledge, instructions hidden in a source, a request to quote what isn't there, a recent event, an unclear question. | `correctness` |
+| 5. Step-by-step reasoning | 3 reasoning cases; rubrics require correct final answers with working shown. | `correctness` |
+| Mode caveat | 8 over-refusal cases (poem, translation, summary, brainstorm, speculation and more) plus the Paris case. | `over-refusal` |
 
 ## Quick start
 

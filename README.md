@@ -8,115 +8,67 @@ AI assistants such as Claude follow written instructions: "cite your sources", "
 
 This repo holds both halves:
 
-1. **Instructions.** What the assistant should do.
-2. **Evaluations ("evals").** Repeatable tests that compare the assistant's answers with and without the instructions, so changes are judged on evidence rather than impressions.
-
-## What's in the repo
+1. **Instructions** ([`CLAUDE.md`](CLAUDE.md)). What the assistant should do.
+2. **Evaluations** ([`evals/`](evals/README.md)). Repeatable tests that compare the assistant's answers with and without the instructions, so changes are judged on evidence rather than impressions.
 
 ```
 ai-skills/
-├── CLAUDE.md          Instructions: the accuracy-first rules
+├── CLAUDE.md          The accuracy-first instructions
 ├── .claude/skills/    Reusable skills (empty for now; see its README)
-└── evals/             The evaluation framework
+└── evals/             The evaluation framework (developer guide inside)
 ```
 
-| Part | What it is | Status |
-|---|---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Accuracy-first instructions: be calibrated about confidence, say "I don't know" rather than guess, quote sources for factual claims, label anything unsourced as "Unverified", reason step by step. Includes a short version you can paste into any AI tool's settings. | In use |
-| [`.claude/skills/`](.claude/skills/README.md) | A place for skills: packaged instructions for specific tasks that Claude Code loads when they're relevant. | Placeholder, no skills yet |
-| [`evals/`](evals/README.md) | Tests that measure whether `CLAUDE.md` improves answers. | Built and dry-run tested, not yet run against Claude |
+## The instructions
 
-## How the instructions are used
+`CLAUDE.md` contains **accuracy-first** instructions. Their goal is an assistant that would rather say "I don't know" than sound confident and be wrong.
 
-- **In Claude Code:** Claude Code reads `CLAUDE.md` automatically when it works in this repo. Nothing else to set up.
-- **Anywhere else** (claude.ai, the Claude app, other tools): copy the "Paste-Ready System Prompt" paragraph from `CLAUDE.md` into the tool's custom instructions or preferences.
+### The default role
 
-## How the evaluation framework works
+> "You are a meticulous research analyst whose professional reputation depends on never overstating confidence."
 
-### The idea in one paragraph
+The role sets the assistant's priorities before any specific rule applies. AI assistants tend to answer fluently and confidently, even when they are unsure. Casting the assistant as an analyst whose reputation depends on calibrated confidence tells it that a careful "I'm not sure" is a good answer, and a confident guess is a bad one.
 
-The eval asks Claude a fixed set of 26 test questions, three times each: once with no instructions, once with all of `CLAUDE.md`, and once with only the short paste-ready version. Every answer is then scored, partly by code and partly by a second AI model acting as an examiner. Comparing the scores of the three versions shows what the instructions change.
+### The five rules and what each one is for
 
-### Architecture
+| # | Rule | What it asks for | The problem it addresses |
+|---|---|---|---|
+| 1 | **Role and confidence calibration** | Restates the default role as the first rule. | Repeats the most important idea so it carries the most weight. How sure the assistant sounds should match how sure it actually is. |
+| 2 | **Explicit uncertainty exit** | When unsure, say "I don't know" or "I am not certain". Don't fill gaps with guesses. | Assistants often invent a plausible answer rather than admit a gap. This rule gives explicit permission to stop, and the exact words to use. |
+| 3 | **Citations or direct quotes** | Back every factual claim with a direct quote from the source. If there is no source, label the claim "Unverified — no source provided". | Makes every claim checkable. You can see where a fact came from, or that it came from nowhere. |
+| 4 | **Grounding boundary** | Only treat these as sources: what the user provides, files read from the repo, and output from tools run in the session. Background knowledge can support reasoning, but facts from it must be labelled "Unverified". If the sources don't answer the question, say "I don't have enough information", say what's missing, and ask for it or offer to look it up. | Rule 3 needs a definition of "source". This draws the line, stops the assistant passing off memory as fact, and turns "I don't know" into a next step. |
+| 5 | **Step-by-step reasoning** | Think step by step before answering logic, maths or multi-step questions. | Working through a problem in steps catches mistakes a snap answer would make. |
 
-```mermaid
-flowchart LR
-    Q["cases.yaml<br/>26 test questions<br/>+ what a good answer does"]
-    I["CLAUDE.md<br/>the instructions"]
-    P["prompts.js<br/>builds 3 versions of each question:<br/>none · full · paste-ready"]
-    A["Claude Opus 5.5<br/>answers each version"]
-    K["checks.js<br/>code checks<br/>(quotes real? labels used?)"]
-    G["Claude Sonnet 5.5<br/>examiner grades against<br/>the written criteria"]
-    S["summary.js<br/>scores per version,<br/>confidence ranges, cost"]
+**The mode caveat.** Strict citation rules make no sense for a poem or a brainstorm. For creative, speculative or brainstorming tasks, rules 3 and 4 are relaxed, but anything speculative must be labelled as such.
 
-    Q --> P
-    I --> P
-    P --> A
-    A --> K
-    A --> G
-    K --> S
-    G --> S
-```
+**Two versions.** `CLAUDE.md` has the full rules above, plus a one-paragraph **Paste-Ready System Prompt** for tools with limited space. The short version covers the role and rules 2, 3 and 5, but not rule 4's definition of a source.
 
-[promptfoo](https://www.promptfoo.dev/), an open-source eval tool, runs the whole pipeline.
+## Loading the instructions into Claude
 
-### Step by step
-
-1. **Test questions** (`cases.yaml`). Each case is a question, sometimes with a short source text to answer from. It also says what a good answer looks like, e.g. "states the library closes at 8pm on weekdays; adds no facts the source doesn't contain". The sources are made up, so the right answer is never in doubt.
-2. **Three versions** (`prompts.js`). Each question is sent once with no instructions (the **baseline**), once with all of `CLAUDE.md`, and once with the paste-ready paragraph. The instructions are read from `CLAUDE.md` every time, so the eval always tests the current wording.
-3. **Answers.** Claude Opus 5.5 answers every version.
-4. **Code checks** (`checks.js`). Fast, exact checks: does every quotation appear word for word in the source? Is an unsourced fact labelled "Unverified"? Is the required "I don't know" wording used?
-5. **Examiner** (Claude Sonnet 5.5). For judgement calls, such as "did it overstate weak evidence?" or "did it give in when the user pushed back?", a second model compares the answer against the written criteria. It's a different model from the one answering, so it isn't marking its own work.
-6. **Summary** (`summary.js`). Every check counts towards one of three scores, reported separately for each version:
-
-| Score | Question it answers |
+| Where you use Claude | How to load the instructions |
 |---|---|
-| **Correctness** | Is the answer right, and are its quotes real? |
-| **Compliance** | Does it follow the rules in `CLAUDE.md`? |
-| **Over-refusal** | Does it still help with ordinary requests, such as a poem, a translation or a code question? |
+| **Claude Code, in this repo** | Nothing to do. Claude Code reads `CLAUDE.md` from the project folder automatically. |
+| **Claude Code, in another project** | Copy `CLAUDE.md` into that project's root folder. |
+| **Claude app or claude.ai** | Paste the Paste-Ready System Prompt paragraph into your personal preferences (custom instructions) in settings. It then applies to every chat. To apply it to one area of work only, paste it into a Project's instructions instead. |
+| **Claude API, in your own code** | Send the paste-ready paragraph, or the whole of `CLAUDE.md`, as the `system` prompt of each request. |
 
-The summary also shows a confidence range for each score, so you can tell a real difference from chance, and what the run cost.
+**Keep copies in sync.** Text pasted into the app or a Project doesn't update when `CLAUDE.md` changes. Re-paste after every edit.
 
-### What the test questions cover
+## Testing the instructions
 
-| Group | Examples |
-|---|---|
-| Grounded (9) | Answer from a supplied source. Admit when the answer isn't there. Flag sources that disagree. Don't invent a quote. Ignore instructions hidden inside a document. Hold a correct answer when the user pushes back. |
-| No source (6) | Don't invent a court case or a sports result. Correct a false premise. Ask when a question is unclear. |
-| Reasoning (3) | Arithmetic and logic puzzles, with working shown. |
-| Over-refusal (8) | Everyday requests the accuracy rules shouldn't block. |
+The `evals/` folder tests whether the instructions help. It asks Claude 26 test questions, with and without the instructions, and scores the answers on three things:
 
-### Checking the examiner
+- **Correctness:** is the answer right?
+- **Compliance:** does it follow the rules above?
+- **Over-refusal:** does it still help with ordinary requests?
 
-An AI examiner can be wrong too, so there's a calibration step (`npm run grader-check`). The examiner is given 30 answers whose verdict is already known, 13 good and 17 deliberately bad, and the eval reports how often it agrees. If it misjudges known answers, its scores on real answers can't be trusted.
+**Developers:** the [developer guide](evals/README.md) covers how it's built, how to run it, cost and how to add tests.
 
-### How a typical improvement loop looks
+**No setup needed:** you can test by hand in the Claude app. Ask the same questions with your custom instructions off and then on, and compare the answers against the criteria in [`evals/cases.yaml`](evals/cases.yaml).
 
-1. Run the eval and read the three scores.
-2. Spot a problem, e.g. compliance went up but over-refusal got worse.
-3. Edit `CLAUDE.md`.
-4. Run the eval again and compare.
-
-## Running the eval
-
-Full instructions, cost estimates and limitations are in [`evals/README.md`](evals/README.md). In short, it needs Node.js 22.22+ and an Anthropic API key:
-
-```bash
-cd evals
-npm ci
-export ANTHROPIC_API_KEY=sk-ant-...
-npx promptfoo eval -n 3     # small pilot first
-npm run summary
-```
-
-`evals/README.md` estimates a full run at about $1.30–$10 with three samples per question. That figure is an estimate; the first run will give the real cost.
-
-**Without an API key:** you can run the same questions by hand in the Claude app, with your custom instructions off and then on, and grade the answers yourself against the criteria in `cases.yaml`. You lose the automatic grading and the repeated samples, but it needs no setup.
-
-## Status and next steps
+## Status
 
 - [x] Accuracy-first instructions (`CLAUDE.md`)
 - [x] Evaluation framework, dry-run tested
-- [ ] First real run, then refine `CLAUDE.md` from the results
+- [ ] First real eval run, then refine `CLAUDE.md` from the results
 - [ ] Replace made-up test questions with real ones over time
 - [ ] Add skills to `.claude/skills/`, with evals for each
