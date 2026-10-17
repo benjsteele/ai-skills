@@ -16,13 +16,7 @@ providers:
       max_tokens: 16000
       effort: medium
 
-defaultTest:
-  options:
-    # Grader is deliberately a different model from the one under test.
-    provider:
-      id: anthropic:messages:claude-sonnet-5-5
-      config:
-        max_tokens: 4000
+defaultTest: file://grader.yaml
 
 tests: file://cases.yaml
 

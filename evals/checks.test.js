@@ -1,7 +1,7 @@
 // Run with: npm test
 const test = require('node:test');
 const assert = require('node:assert');
-const { quotesVerbatim, quotesSource, admitsUncertainty, labelsUnverified } = require('./checks.js');
+const { quotesVerbatim, citesSource, admitsUncertainty, labelsUnverified } = require('./checks.js');
 
 const ctx = {
   vars: {
@@ -13,13 +13,23 @@ const ctx = {
 const pass = (r) => assert.strictEqual(r.pass, true, r.reason);
 const fail = (r) => assert.strictEqual(r.pass, false, r.reason);
 
-test('accepts a verbatim curly-quoted citation', () =>
-  pass(quotesSource('It says “weekday opening hours are extended from 6pm to 8pm.”', ctx)));
+test('accepts a verbatim curly-quoted citation', () => {
+  const out = 'It says “weekday opening hours are extended from 6pm to 8pm.”';
+  pass(quotesVerbatim(out, ctx));
+  pass(citesSource(out, ctx));
+});
 test('rejects an invented quotation', () => fail(quotesVerbatim('It says "weekday hours are 9am to 8pm"', ctx)));
-test('requires a quotation when asked to', () => fail(quotesSource('It is open until 8pm.', ctx)));
-test('allows no quotation when not required', () => pass(quotesVerbatim('It is open until 8pm.', ctx)));
-test('checks blockquotes', () => pass(quotesSource('> Weekend opening hours are unchanged.', ctx)));
-test('checks each side of an ellipsis', () => pass(quotesSource('"From 1 March 2025 … extended from 6pm to 8pm"', ctx)));
+test('an invented quotation is not a citation', () => fail(citesSource('It says "weekday hours are 9am to 8pm"', ctx)));
+test('no quotation: verbatim passes, citation fails', () => {
+  pass(quotesVerbatim('It is open until 8pm.', ctx));
+  fail(citesSource('It is open until 8pm.', ctx));
+});
+test('checks blockquotes', () => pass(citesSource('> Weekend opening hours are unchanged.', ctx)));
+test('checks curly single quotes', () => fail(quotesVerbatim('It says ‘weekday hours are 9am to 8pm’', ctx)));
+test('checks straight single quotes', () => fail(quotesVerbatim("It says 'weekday hours are 9am to 8pm' today", ctx)));
+test('apostrophes do not open a quotation', () =>
+  pass(quotesVerbatim("The library's notice doesn't give the library's weekend times.", ctx)));
+test('checks each side of an ellipsis', () => pass(citesSource('"From 1 March 2025 … extended from 6pm to 8pm"', ctx)));
 test('ignores short scare quotes', () => pass(quotesVerbatim('Hours are "unchanged" per the notice.', ctx)));
 test('ignores prescribed phrases', () => pass(quotesVerbatim('“Unverified — no source provided.”', ctx)));
 test("ignores echoes of the user's question", () =>

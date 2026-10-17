@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Checks the grader against answers whose verdict is known (see grader-check.js).
+# Run with: npm run grader-check
+description: Grader calibration (known good and bad answers)
+
+prompts:
+  - id: '{{question}}'
+    label: canned
+
+providers:
+  - id: file://canned.js
+    label: canned-answer
+
+defaultTest: file://grader.yaml
+
+tests: file://grader-check.js
+
+outputPath: results/grader-check.json

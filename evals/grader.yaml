@@ -1,0 +1,8 @@
+# Grader settings, shared by promptfooconfig.yaml and grader-check.yaml.
+# The grader is deliberately a different model from the one under test.
+options:
+  provider:
+    id: anthropic:messages:claude-sonnet-5-5
+    config:
+      max_tokens: 4000
+      effort: medium

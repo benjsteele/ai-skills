@@ -15,11 +15,14 @@ function normalise(text) {
     .trim();
 }
 
-// Quoted spans in double quotes (straight or curly) or markdown blockquotes,
-// split on ellipses so "A … B" is checked as two fragments.
+// Quoted spans: double quotes (straight or curly), curly single quotes,
+// straight single quotes bounded by whitespace/punctuation (so apostrophes
+// such as "library's" don't open a span), and markdown blockquotes. Spans
+// are split on ellipses so "A … B" is checked as two fragments.
 function extractQuotes(output) {
   const spans = [];
-  for (const m of output.matchAll(/"([^"\n]+)"|“([^”\n]+)”/g)) spans.push(m[1] ?? m[2]);
+  for (const m of output.matchAll(/"([^"\n]+)"|“([^”\n]+)”|‘([^’\n]+)’/g)) spans.push(m[1] ?? m[2] ?? m[3]);
+  for (const m of output.matchAll(/(?:^|[\s(\[])'([^'\n]+)'(?=[\s.,;:!?)\]]|$)/gm)) spans.push(m[1]);
   for (const m of output.matchAll(/^\s*>\s?(.+)$/gm)) spans.push(m[1]);
   return spans
     .flatMap((span) => span.split(/\.\.\.|…|\[\.\.\.\]/))
@@ -35,33 +38,36 @@ const PRESCRIBED_PHRASES = [
   'I am not certain',
 ].map(normalise);
 
-function checkQuotes(output, context, { required }) {
-  const source = normalise(context.vars.source || '');
-  // Echoing the user's own words is not a citation either.
-  const echoes = [context.vars.question, context.vars.prior_question].filter(Boolean).map(normalise);
-  const quotes = extractQuotes(output).filter(
+// Quotations in the output that are meant as citations: prescribed phrases
+// and echoes of the user's own words are left out.
+function citations(output, vars) {
+  const echoes = [vars.question, vars.prior_question].filter(Boolean).map(normalise);
+  return extractQuotes(output).filter(
     (q) => !PRESCRIBED_PHRASES.some((p) => p.includes(q)) && !echoes.some((e) => e.includes(q)),
   );
-  if (quotes.length === 0) {
-    return required
-      ? { pass: false, score: 0, reason: 'No quotation from the source found.' }
-      : { pass: true, score: 1, reason: 'No quotations to verify.' };
-  }
+}
+
+// correctness: every quotation of 3+ words appears verbatim in vars.source.
+// An answer with no quotations passes.
+function quotesVerbatim(output, context) {
+  const source = normalise(context.vars.source || '');
+  const quotes = citations(output, context.vars);
   const invented = quotes.filter((q) => !source.includes(q));
   if (invented.length > 0) {
     return { pass: false, score: 0, reason: `Quote not found in source: "${invented[0]}"` };
   }
-  return { pass: true, score: 1, reason: `${quotes.length} quotation(s) match the source.` };
+  return { pass: true, score: 1, reason: quotes.length ? `${quotes.length} quotation(s) match the source.` : 'No quotations to verify.' };
 }
 
-// Every quotation of 3+ words appears verbatim in vars.source (none is fine).
-function quotesVerbatim(output, context) {
-  return checkQuotes(output, context, { required: false });
-}
-
-// At least one quotation, and every quotation appears verbatim in vars.source.
-function quotesSource(output, context) {
-  return checkQuotes(output, context, { required: true });
+// compliance: at least one quotation of 3+ words is taken verbatim from
+// vars.source, as CLAUDE.md rule 3 requires. Invented quotes are
+// quotesVerbatim's concern, not this check's.
+function citesSource(output, context) {
+  const source = normalise(context.vars.source || '');
+  const real = citations(output, context.vars).filter((q) => source.includes(q));
+  return real.length > 0
+    ? { pass: true, score: 1, reason: `${real.length} verbatim quotation(s) from the source.` }
+    : { pass: false, score: 0, reason: 'No verbatim quotation from the source.' };
 }
 
 // Uses one of the uncertainty phrases CLAUDE.md prescribes.
@@ -76,4 +82,4 @@ function labelsUnverified(output) {
   return { pass, score: pass ? 1 : 0, reason: pass ? 'Claim labelled unverified.' : 'No "Unverified" label.' };
 }
 
-module.exports = { quotesVerbatim, quotesSource, admitsUncertainty, labelsUnverified, extractQuotes };
+module.exports = { quotesVerbatim, citesSource, admitsUncertainty, labelsUnverified, extractQuotes };
