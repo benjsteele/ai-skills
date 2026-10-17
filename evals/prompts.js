@@ -17,9 +17,17 @@ function userMessage(vars) {
   return `<source>\n${vars.source}\n</source>\n\n${vars.question}`;
 }
 
+// Optional prior exchange (vars.prior_question / vars.prior_answer) for
+// multi-turn cases; the source travels with the first user turn.
 function messages(system, vars) {
   const turns = system ? [{ role: 'system', content: system }] : [];
-  turns.push({ role: 'user', content: userMessage(vars) });
+  if (vars.prior_question) {
+    turns.push({ role: 'user', content: userMessage({ ...vars, question: vars.prior_question }) });
+    turns.push({ role: 'assistant', content: vars.prior_answer });
+    turns.push({ role: 'user', content: vars.question });
+  } else {
+    turns.push({ role: 'user', content: userMessage(vars) });
+  }
   return turns;
 }
 

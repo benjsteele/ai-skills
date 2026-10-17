@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "eval": "promptfoo eval",
-    "view": "promptfoo view"
+    "view": "promptfoo view",
+    "test": "node --test checks.test.js"
   },
   "devDependencies": {
     "promptfoo": "0.124.1"
