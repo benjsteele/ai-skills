@@ -1,0 +1,11 @@
+{
+  "name": "ai-skills-evals",
+  "private": true,
+  "scripts": {
+    "eval": "promptfoo eval",
+    "view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "0.124.1"
+  }
+}

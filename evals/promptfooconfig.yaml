@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Accuracy-first instructions (CLAUDE.md) vs. no system prompt
+
+prompts:
+  - id: file://prompts.js:baseline
+    label: baseline
+  - id: file://prompts.js:claudeMd
+    label: claude-md
+  - id: file://prompts.js:pasteReady
+    label: paste-ready
+
+providers:
+  - id: anthropic:messages:claude-opus-5-5
+    label: opus-5.5
+    config:
+      max_tokens: 16000
+      effort: medium
+
+defaultTest:
+  options:
+    # Grader is deliberately a different model from the one under test.
+    provider:
+      id: anthropic:messages:claude-sonnet-5-5
+      config:
+        max_tokens: 4000
+
+tests: file://cases.yaml
+
+outputPath: results/latest.json
