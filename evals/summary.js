@@ -86,8 +86,8 @@ for (const [label, v] of variants) {
     console.log(`  ${name.padEnd(16)} ${pct(m.n ? m.pass / m.n : 0)}  (${m.pass}/${m.n} checks, 95% CI ${pct(lo)}–${pct(hi)})`);
   }
   const t = v.tokens;
-  console.log(`  tokens        answers ${t.model.prompt} in / ${t.model.completion} out; grader ${t.grader.prompt} in / ${t.grader.completion} out`);
-  console.log(`  cost          ${usd(v.cost)}\n`);
+  console.log(`  tokens           answers ${t.model.prompt} in / ${t.model.completion} out; grader ${t.grader.prompt} in / ${t.grader.completion} out`);
+  console.log(`  cost             ${usd(v.cost)}\n`);
 }
 const total = [...variants.values()].reduce((sum, v) => sum + v.cost, 0);
 console.log(`Total cost: ${usd(total)} (answers from cache cost nothing)`);
