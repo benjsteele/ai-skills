@@ -9,12 +9,7 @@ prompts:
   - id: file://prompts.js:pasteReady
     label: paste-ready
 
-providers:
-  - id: anthropic:messages:claude-opus-5-5
-    label: opus-5.5
-    config:
-      max_tokens: 16000
-      effort: medium
+providers: file://providers.yaml
 
 defaultTest: file://grader.yaml
 

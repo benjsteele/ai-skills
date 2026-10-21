@@ -1,0 +1,8 @@
+# The model under test. Shared by promptfooconfig.yaml,
+# promptfooconfig.adversarial.yaml and preflight.yaml, so changing the provider
+# here changes it everywhere. See README.md "Using a different provider".
+- id: anthropic:messages:claude-opus-5-5
+  label: opus-5.5
+  config:
+    max_tokens: 16000
+    effort: medium

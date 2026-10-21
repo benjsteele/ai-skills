@@ -6,7 +6,9 @@
     "view": "promptfoo view",
     "summary": "node summary.js results/latest.json",
     "grader-check": "promptfoo eval -c grader-check.yaml && node summary.js results/grader-check.json",
-    "test": "node --test checks.test.js"
+    "preflight": "promptfoo eval -c preflight.yaml && node summary.js results/preflight.json",
+    "adversarial": "promptfoo eval -c promptfooconfig.adversarial.yaml && node summary.js results/adversarial.json",
+    "test": "node --test checks.test.js summary.test.js"
   },
   "devDependencies": {
     "js-yaml": "5.4.2",

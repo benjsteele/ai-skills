@@ -6,13 +6,16 @@
 // overlap are not reliably different.
 const fs = require('fs');
 
-// US$ per million tokens, Anthropic list prices. Update when prices change.
+// US$ per million tokens, vendor list prices. Add a row for any other model
+// you point the config at; a provider id is matched by longest substring.
 const PRICES = {
   'claude-opus-5-5': { input: 4, output: 20 },
   'claude-sonnet-5-5': { input: 2, output: 10 },
+  'gpt-4o-mini-2024-07-18': { input: 0.15, output: 0.6 },
+  'gpt-4.1-2025-04-14': { input: 2, output: 8 },
 };
-// Must match grader.yaml.
-const GRADER_MODEL = 'claude-sonnet-5-5';
+// Must match the grader in grader.yaml. Override with GRADER_MODEL=<key>.
+const GRADER_MODEL = process.env.GRADER_MODEL || 'claude-sonnet-5-5';
 
 function wilson(passes, n) {
   if (n === 0) return [0, 0];
@@ -30,7 +33,10 @@ function price(model, tokens) {
 }
 
 function modelOf(providerId) {
-  return Object.keys(PRICES).find((m) => (providerId || '').includes(m));
+  // Longest match wins so a vendor-prefixed id beats a bare model name.
+  return Object.keys(PRICES)
+    .filter((m) => (providerId || '').includes(m))
+    .sort((a, b) => b.length - a.length)[0];
 }
 
 const pct = (x) => `${Math.round(x * 100)}%`.padStart(4);
@@ -41,6 +47,10 @@ const data = JSON.parse(fs.readFileSync(file, 'utf8'));
 const results = data.results.results;
 
 const variants = new Map();
+// Per case: how many answers were attempted and how many errored, across all
+// versions. A case that errors every time is almost certainly being refused
+// or content-filtered by the provider, not failing transiently.
+const caseErrors = new Map();
 for (const r of results) {
   const label = r.prompt.label;
   if (!variants.has(label)) {
@@ -48,6 +58,9 @@ for (const r of results) {
   }
   const v = variants.get(label);
   v.cases += 1;
+  const caseName = (r.testCase && r.testCase.description) || '(unnamed case)';
+  if (!caseErrors.has(caseName)) caseErrors.set(caseName, { attempts: 0, errors: 0 });
+  caseErrors.get(caseName).attempts += 1;
 
   const model = modelOf(r.provider && r.provider.id);
   const usage = (r.response && r.response.tokenUsage) || {};
@@ -65,6 +78,7 @@ for (const r of results) {
   // A provider error means no answer was graded: count it, don't score it.
   if (r.error && !(r.gradingResult && r.gradingResult.componentResults)) {
     v.errors += 1;
+    caseErrors.get(caseName).errors += 1;
     continue;
   }
   for (const c of (r.gradingResult && r.gradingResult.componentResults) || []) {
@@ -91,3 +105,15 @@ for (const [label, v] of variants) {
 }
 const total = [...variants.values()].reduce((sum, v) => sum + v.cost, 0);
 console.log(`Total cost: ${usd(total)} (answers from cache cost nothing)`);
+
+const blocked = [...caseErrors].filter(([, c]) => c.errors === c.attempts);
+const flaky = [...caseErrors].filter(([, c]) => c.errors > 0 && c.errors < c.attempts);
+console.log(`\nCases scored: ${caseErrors.size - blocked.length}/${caseErrors.size}`);
+if (blocked.length) {
+  console.log('Errored on every attempt (provider refusal or content filter; not scored):');
+  for (const [name] of blocked) console.log(`  - ${name}`);
+}
+if (flaky.length) {
+  console.log('Errored on some attempts (likely transient; re-run to fill in):');
+  for (const [name, c] of flaky) console.log(`  - ${name} (${c.errors}/${c.attempts})`);
+}

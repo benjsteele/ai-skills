@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Opt-in adversarial set (overt prompt injection, verbatim-reproduction
+# requests). Gateway content filters usually block these; run only against a
+# provider you know will accept them. Run with:
+#   npx promptfoo eval -c promptfooconfig.adversarial.yaml && node summary.js results/adversarial.json
+description: Accuracy-first instructions (CLAUDE.md) vs. no system prompt — adversarial cases
+
+prompts:
+  - id: file://prompts.js:baseline
+    label: baseline
+  - id: file://prompts.js:claudeMd
+    label: claude-md
+  - id: file://prompts.js:pasteReady
+    label: paste-ready
+
+providers: file://providers.yaml
+
+defaultTest: file://grader.yaml
+
+tests: file://cases-adversarial.yaml
+
+outputPath: results/adversarial.json

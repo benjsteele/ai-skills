@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+# Preflight: one cheap call per case, no grader. Finds cases that your provider
+# or gateway refuses or content-filters BEFORE you spend money on a full run.
+# Uses the same provider as the main config (providers.yaml) and the full
+# CLAUDE.md prompt, since some filters inspect the system prompt too.
+#
+#   npm run preflight
+#
+# Every case should pass. An error on a case means the provider would not
+# answer it; a full run would show the same error for every version.
+
+prompts:
+  - id: file://prompts.js:claudeMd
+    label: claude-md
+
+providers: file://providers.yaml
+
+tests: file://preflight.js
+
+outputPath: results/preflight.json
