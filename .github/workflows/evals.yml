@@ -1,0 +1,30 @@
+name: evals
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: evals/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # Every config must load; this catches drift between the shared files
+      # and the configs that reference them. No API calls are made.
+      - run: |
+          for c in promptfooconfig.yaml grader-check.yaml preflight.yaml promptfooconfig.adversarial.yaml; do
+            npx promptfoo validate -c "$c"
+          done
+      # The prompt loaders must build without a provider.
+      - run: |
+          node -e "require('./prompts.js'); require('./grader-check.js'); require('./preflight.js'); console.log('loaders ok')"

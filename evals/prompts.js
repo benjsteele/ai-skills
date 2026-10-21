@@ -1,14 +1,17 @@
-// Prompt variants under test. Each reads ../CLAUDE.md at run time so the eval
-// always tests the current instructions, never a stale copy.
+// Prompt variants under test. Each reads its source file at run time so the
+// eval always tests the current instructions, never a stale copy.
 const fs = require('fs');
 const path = require('path');
 
-const CLAUDE_MD = fs.readFileSync(path.join(__dirname, '..', 'CLAUDE.md'), 'utf8');
+const ROOT = path.join(__dirname, '..');
+const CLAUDE_MD = fs.readFileSync(path.join(ROOT, 'CLAUDE.md'), 'utf8');
 
-// The standalone prompt is the paragraph under "## Paste-Ready System Prompt".
+// The standalone prompt is the text under "## Prompt" in
+// prompts/accuracy-first-short.md, up to the next heading or end of file.
 const PASTE_READY = (() => {
-  const match = CLAUDE_MD.match(/## Paste-Ready System Prompt\s+([\s\S]*?)\n## /);
-  if (!match) throw new Error('Could not find "## Paste-Ready System Prompt" section in CLAUDE.md');
+  const file = path.join(ROOT, 'prompts', 'accuracy-first-short.md');
+  const match = fs.readFileSync(file, 'utf8').match(/^## Prompt\s+([\s\S]*?)(?=\n## |\s*$)/m);
+  if (!match || !match[1].trim()) throw new Error(`Could not find a "## Prompt" section in ${file}`);
   return match[1].trim();
 })();
 
