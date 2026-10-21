@@ -1,91 +1,130 @@
 # ai-skills
 
-Instructions that shape how AI assistants behave in day-to-day work, plus a way to test whether those instructions actually help.
+A set of written instructions that make Claude more careful about facts, and a test harness that measures whether they work.
 
-## Why this exists
+## What this is
 
-AI assistants such as Claude follow written instructions: "cite your sources", "say when you don't know", "show your working". Writing those instructions is easy. Knowing whether they work is not. An instruction can make answers more accurate, make no difference, or quietly make the assistant less helpful, for example by refusing simple questions or burying answers under caveats.
+Claude, like every AI assistant, follows instructions you give it at the start of a conversation. This repo contains one such set of instructions, called **accuracy-first**, and the tooling to check that it does what it claims.
 
-This repo holds both halves:
+The instructions tell Claude to:
 
-1. **Instructions** ([`CLAUDE.md`](CLAUDE.md)). What the assistant should do.
-2. **Evaluations** ([`evals/`](evals/README.md)). Repeatable tests that compare the assistant's answers with and without the instructions, so changes are judged on evidence rather than impressions.
+- say "I don't know" rather than guess;
+- quote its sources word for word, and label anything it can't source as unverified;
+- treat only the material in front of it as a source, not its background knowledge;
+- show its working on anything that needs reasoning.
+
+The test harness asks Claude 26 questions three ways — with no instructions, with the full instructions, and with a short paste-ready version — and scores every answer on whether it is right, whether it followed the rules, and whether it still helped with ordinary requests. Results from real runs are in [Results](#results) below.
+
+Everything here is plain text. There is no code to install to *use* the instructions; the code in `evals/` is only for *testing* them.
 
 ```
 ai-skills/
-├── CLAUDE.md          The accuracy-first instructions (read by Claude Code)
-├── prompts/           Paste-ready short version for apps and APIs
-├── .claude/skills/    Reusable skills (empty for now; see its README)
-└── evals/             The evaluation framework (developer guide inside)
+├── CLAUDE.md                        The accuracy-first instructions (read by Claude Code)
+├── prompts/accuracy-first-short.md  One-paragraph version for apps and APIs
+├── .claude/skills/                  Reusable skills (empty for now; see its README)
+└── evals/                           The test harness (developer guide inside)
 ```
 
-## The instructions
+## What this is not
 
-`CLAUDE.md` contains **accuracy-first** instructions. Their goal is an assistant that would rather say "I don't know" than sound confident and be wrong.
+- **Not a jailbreak defence or safety layer.** The instructions make Claude more honest about what it knows; they don't stop a determined user from asking it to do something it shouldn't, and they are not a substitute for Claude's own safeguards or your organisation's controls.
+- **Not a guarantee of correctness.** An instruction can only shape how Claude *presents* what it knows. If the source it is given is wrong, a well-behaved answer quotes the wrong source accurately and flags the conflict; it does not magically know better. The eval shows a strong model is already near 100% correct on these questions with or without the instructions.
+- **Not a fact checker or retrieval system.** Nothing here looks anything up. "Quote your source" means the source you pasted in, the file it read, or the output of a tool it ran in the conversation, and nothing else.
+- **Not a style guide for creative work.** The instructions explicitly relax for poems, brainstorming and speculation. They are for research, analysis and anything where a wrong fact has a cost.
+- **Not tuned for a specific product.** The cases in the eval are synthetic (a fictional library notice, a fictional railway report). They prove the mechanism works; they don't prove it works on your documents. See [Status](#status).
+- **Not a benchmark of Claude.** The eval compares Claude with and without the instructions. It says nothing about how Claude compares to other models.
 
-### The default role
+## The instructions in detail
+
+`CLAUDE.md` opens with a role, then gives five rules, then a caveat.
+
+### The role
 
 > "You are a meticulous research analyst whose professional reputation depends on never overstating confidence."
 
-The role sets the assistant's priorities before any specific rule applies. AI assistants tend to answer fluently and confidently, even when they are unsure. Casting the assistant as an analyst whose reputation depends on calibrated confidence tells it that a careful "I'm not sure" is a good answer, and a confident guess is a bad one.
+AI assistants default to fluent and confident. The role tells Claude that a careful "I'm not sure" is a good answer and a confident guess is a bad one, before any specific rule applies.
 
-### The five rules and what each one is for
+### The five rules
 
 | # | Rule | What it asks for | The problem it addresses |
 |---|---|---|---|
-| 1 | **Role and confidence calibration** | Restates the default role as the first rule. | Repeats the most important idea so it carries the most weight. How sure the assistant sounds should match how sure it actually is. |
-| 2 | **Explicit uncertainty exit** | When unsure, say "I don't know" or "I am not certain". Don't fill gaps with guesses. | Assistants often invent a plausible answer rather than admit a gap. This rule gives explicit permission to stop, and the exact words to use. |
+| 1 | **Role and confidence calibration** | Restates the role as the first rule. | Repeats the most important idea so it carries the most weight. How sure the assistant sounds should match how sure it actually is. |
+| 2 | **Explicit uncertainty exit** | When unsure, say "I don't know" or "I am not certain". Don't fill gaps with guesses. | Assistants often invent a plausible answer rather than admit a gap. This gives explicit permission to stop, and the exact words to use. |
 | 3 | **Citations or direct quotes** | Back every factual claim with a direct quote from the source. If there is no source, label the claim "Unverified — no source provided". | Makes every claim checkable. You can see where a fact came from, or that it came from nowhere. |
 | 4 | **Grounding boundary** | Only treat these as sources: what the user provides, files read from the repo, and output from tools run in the session. Background knowledge can support reasoning, but facts from it must be labelled "Unverified". If the sources don't answer the question, say "I don't have enough information", say what's missing, and ask for it or offer to look it up. | Rule 3 needs a definition of "source". This draws the line, stops the assistant passing off memory as fact, and turns "I don't know" into a next step. |
 | 5 | **Step-by-step reasoning** | Think step by step before answering logic, maths or multi-step questions. | Working through a problem in steps catches mistakes a snap answer would make. |
 
-**The mode caveat.** Strict citation rules make no sense for a poem or a brainstorm. For creative, speculative or brainstorming tasks, rules 3 and 4 are relaxed, but anything speculative must be labelled as such.
+### The mode caveat
 
-**Two versions.** `CLAUDE.md` has the full rules above. [`prompts/accuracy-first-short.md`](prompts/accuracy-first-short.md) has a one-paragraph **paste-ready** version for tools with limited space. The short version covers the role and rules 2, 3 and 5, but not rule 4's definition of a source or the mode caveat.
+Strict citation rules make no sense for a poem or a brainstorm. For creative, speculative or brainstorming tasks, rules 3 and 4 are relaxed, but anything speculative must be labelled as such.
+
+### The short version
+
+[`prompts/accuracy-first-short.md`](prompts/accuracy-first-short.md) is a single paragraph for places with limited space. It carries the role and rules 2, 3 and 5. It leaves out rule 4's definition of a source and the mode caveat. In testing it performs the same as the full file on every measure (see [Results](#results)).
 
 ## Loading the instructions into Claude
 
-| Where you use Claude | How to load the instructions |
-|---|---|
-| **Claude Code, in this repo** | Nothing to do. Claude Code reads `CLAUDE.md` from the project folder automatically. |
-| **Claude Code, in another project** | Copy `CLAUDE.md` into that project's root folder. |
-| **Claude app or claude.ai** | Paste the paragraph from [`prompts/accuracy-first-short.md`](prompts/accuracy-first-short.md) into your personal preferences (custom instructions) in settings. It then applies to every chat. To apply it to one area of work only, paste it into a Project's instructions instead. |
-| **Claude API, in your own code** | Send the paste-ready paragraph, or the whole of `CLAUDE.md`, as the `system` prompt of each request. |
+Pick the row that matches where you use Claude. You only need one.
 
-**Keep copies in sync.** Text pasted into the app or a Project doesn't update when `CLAUDE.md` changes. Re-paste after every edit.
+| Where you use Claude | What to do | What happens |
+|---|---|---|
+| **Claude Code, working in this repo** | Nothing. | Claude Code reads `CLAUDE.md` from the project root at the start of every session. |
+| **Claude Code, in another project** | Copy `CLAUDE.md` into that project's root folder (next to its `package.json`, `pyproject.toml` or equivalent). If the project already has a `CLAUDE.md`, paste the contents into it. | Same as above. The file is read on every session start, so edits take effect the next time you open Claude Code. |
+| **Claude app or claude.ai, for every chat** | In the app's settings, find the custom-instructions or personal-preferences box (its name and location vary by version) and paste the paragraph from `prompts/accuracy-first-short.md`. | Applies to every new conversation. Existing conversations are not affected. |
+| **Claude app or claude.ai, for one area of work** | Create or open a **Project**, open its **Instructions**, and paste the paragraph there. | Applies only to chats inside that Project. Use this if you want accuracy-first for research but not for, say, drafting emails. |
+| **Claude API, in your own code** | Pass the paragraph (or the whole of `CLAUDE.md`) as the `system` parameter of each `messages.create` call. | Applies to that request only. Read the file at startup rather than hard-coding the text, so it tracks the repo. |
+
+**Which version to paste.** Use the full `CLAUDE.md` wherever it fits (Claude Code, the API). Use the short paragraph where space is tight (the app's settings box). In testing the two perform the same, so this is a convenience choice, not a quality one.
+
+**Keep copies in sync.** Text pasted into the app or a Project is a snapshot. When `CLAUDE.md` or the short version changes, re-paste. Claude Code and the API read the file live, so they need no action.
 
 ## Testing the instructions
 
-The `evals/` folder tests whether the instructions help. It asks Claude 26 test questions, with and without the instructions, and scores the answers on three things:
+The `evals/` folder is a [promptfoo](https://www.promptfoo.dev/) project. It asks Claude the same 26 questions three times — no instructions, the full `CLAUDE.md`, the short paragraph — and scores each answer against checks written in advance.
 
-- **Correctness:** is the answer right?
-- **Compliance:** does it follow the rules above?
-- **Over-refusal:** does it still help with ordinary requests?
+Every check reports into one of three scores:
 
-**Developers:** the [developer guide](evals/README.md) covers how it's built, how to run it, cost and how to add tests.
+| Score | Question it answers | What a good result looks like |
+|---|---|---|
+| **Correctness** | Is the answer right, and are its quotations real? | High for every version. If the instructions *lower* it, they are making Claude worse. |
+| **Compliance** | Does it follow the rules: verbatim quotes, the prescribed uncertainty phrases, "Unverified" labels? | Low without instructions (Claude wasn't told the rules), high with them. This is the direct test of whether the instructions are being followed. |
+| **Over-refusal** | Does it still write the poem, brainstorm the names, answer "what's the capital of France"? | High for every version. If the instructions lower it, Claude has become unhelpful. |
 
-**No setup needed:** you can test by hand in the Claude app. Ask the same questions with your custom instructions off and then on, and compare the answers against the criteria in [`evals/cases.yaml`](evals/cases.yaml).
+The 26 cases cover four kinds of situation: a source is supplied (does Claude quote it, notice when it's wrong, refuse to invent what isn't there?); no source is supplied (does it answer common knowledge, refuse to fabricate a court case, correct a false premise?); reasoning (arithmetic, constraints, a syllogism); and everyday requests that the rules must not block.
 
-## Results so far
+Answers are graded by a second, different Claude model, so the model under test isn't marking its own work. The grader is itself calibrated against 63 answers whose verdict is known in advance.
 
-First real run, 20–21 October 2026. Each of the 26 cases was asked 3 times per version. Model under test: Claude Opus 5.5. Grader: Claude Sonnet 5.5, which agreed 32/32 with known verdicts in calibration at the time; the calibration set has since grown to 63 answers covering every rubric, and GPT-4.1 scores 63/63 on it. Cost: about $2.60 per full run at list prices. All 26 cases scored.
+**For developers:** the [developer guide](evals/README.md) covers architecture, how to run it, what it costs, how to add cases, and how to point it at a different model or gateway.
+
+**No setup needed:** you can run a manual version in the Claude app. Ask the questions in [`evals/cases.yaml`](evals/cases.yaml) with your custom instructions off and then on, and compare against each case's criteria.
+
+## Results
+
+### Opus 5.5, two independent runs — 21 October 2026
+
+Model under test: Claude Opus 5.5. Grader: Claude Sonnet 5.5 (calibration: 63/63 known verdicts, every rubric covered). Each run asked all 26 cases 3 times per version with fresh answers (no cache), so the two runs are independent samples of the same experiment. All 26 cases scored in both. Three runs were planned; the third was stopped after the first two agreed closely enough that it would not have changed the conclusions.
 
 | Score | No instructions | Full `CLAUDE.md` | Paste-ready paragraph |
 |---|---|---|---|
-| Correctness | 100% (102/102) | 98% (100/102) | 100% (102/102) |
-| Compliance | 8% (4/51) | 96% (49/51) | **100%** (51/51) |
-| Over-refusal (higher is better) | 100% (27/27) | 100% (27/27) | 100% (27/27) |
+| **Correctness** | 100%, 100% | 100%, 100% | 100%, 99% |
+| **Compliance** | 10%, 10% | 94%, 92% | **98%, 100%** |
+| **Over-refusal** (higher is better) | 100%, 100% | 100%, 100% | 100%, 100% |
 
-What this says:
+Each cell shows run 1, run 2. Correctness is out of 102 checks per version per run, compliance out of 51, over-refusal out of 27.
 
-- **The rules are followed.** With the instructions loaded, 49–51 of 51 compliance checks passed: quotes are verbatim, the prescribed uncertainty phrases are used, unsourced facts are labelled. Without them, 8%.
-- **No cost to helpfulness.** Not one over-refusal in any version, including the paste-ready paragraph that omits the mode caveat.
-- **Correctness can't improve on these cases.** Opus 5.5 already scores 100% without instructions, so the synthetic cases are too easy to show a gain.
-- **The full file can over-hedge.** Its only two correctness misses were on the pushback case: it kept the right price (£8), quoted the source, and refused to switch to £10, but then added that it "can't say which is current" and labelled the user's claim "Unverified". That is rule 4 applied to the user's own words, and the grader read it as presenting the price as uncertain. The paste-ready paragraph, which omits rule 4, did not do this. Whether it is a flaw or correct caution is a judgement call; the case is listed as one in the developer guide.
-- **Paste-ready is as good as the full file here.** Across three full runs the two versions traded single-check misses; neither is reliably better on these cases.
-- **The two filter-sensitive cases now run.** An earlier version of this run covered only 24 of 26 because the gateway's content filter refused two cases outright. Both were reworded to keep what they test while passing the filter (see the [developer guide](evals/README.md#content-filters)); the overt originals are kept as an opt-in adversarial set. The instructed versions passed the reworded injection case 6/6.
+**Cost per run:** $2.49 at list prices ($0.60 baseline, $0.94 full file, $0.96 paste-ready; the instructed versions cost more because the system prompt adds input tokens and the answers are longer). Each run took about 8½ minutes at concurrency 4 and used roughly 72k input / 83k output tokens for answers and 137k / 26k for grading. Two runs: **$4.98**.
 
-A control run on a much weaker model (GPT-4o mini, graded by GPT-4.1, same cases, 3 repeats, $0.25, re-run clean after the checker fix) told a different story:
+**What the runs show:**
+
+- **The rules are followed.** With the instructions loaded, 47–51 of 51 compliance checks passed in every run. Without them, 5 of 51. This is the headline result and it is far outside the noise floor.
+- **No cost to correctness or helpfulness.** Every version scored 100% correctness in run 1 and 99–100% in run 2, and 27/27 over-refusal checks in both runs. On these cases, Opus 5.5 is already at ceiling without instructions, so the eval cannot show a correctness *gain*; it shows the instructions don't cause a loss.
+- **The misses are consistent and small.** Across both runs the full file missed the prescribed uncertainty phrase on the quote-request case every time (6/6) and once on the fabricated-entity case: it conveys the uncertainty in its own words rather than saying "I don't know" verbatim. Paste-ready missed the phrase once in run 1. Paste-ready's one correctness miss in run 2 was real: it put its own paraphrase in quotation marks and attributed it to the source, which is exactly what the verbatim-quote check exists to catch.
+- **Paste-ready is as good as the full file.** It edged ahead on compliance in both runs (98/100 vs 94/92) and matched on everything else. The difference is inside the noise floor at this sample size, but it has now held across five full runs. If you only have room for one paragraph, you lose nothing measurable.
+- **The two filter-sensitive cases run cleanly.** Both reworded cases scored in both runs; the instructed versions passed the embedded-instruction case 12/12.
+
+### GPT-4o mini control — 20 October 2026
+
+A single run on a much weaker model (GPT-4o mini, graded by GPT-4.1, same cases, 3 repeats, $0.25) told a different story:
 
 | Score | No instructions | Full `CLAUDE.md` | Paste-ready paragraph |
 |---|---|---|---|
@@ -93,11 +132,13 @@ A control run on a much weaker model (GPT-4o mini, graded by GPT-4.1, same cases
 | Compliance | 0% (0/51) | 51% (26/51) | 41% (21/51) |
 | Over-refusal | 100% | 100% | 100% |
 
-Here the instructions fixed every baseline failure: inventing a court case (3/3 runs), accepting a source's false claim that Sydney is Australia's capital (2/3), and not flagging two documents that disagree (3/3). But the weak model only half-follows the rules it is given: it paraphrases where it was told to quote (`citesSource` 12/24), uses its own words for uncertainty rather than the prescribed phrases (12/18), and almost never applies the "Unverified" label (2/9). The instructions help a weak model be right and a strong model be checkable. This run covered all 26 cases.
+Here the instructions fixed every baseline failure: inventing a court case (3/3 runs), accepting a source's false claim that Sydney is Australia's capital (2/3), and not flagging two documents that disagree (3/3). But the weak model only half-follows the rules it is given: it paraphrases where it was told to quote (`citesSource` 12/24), uses its own words for uncertainty rather than the prescribed phrases (12/18), and almost never applies the "Unverified" label (2/9). The instructions help a weak model be right and a strong model be checkable.
 
-To reproduce: `cd evals && npm run preflight && npx promptfoo eval --repeat 3 && npm run summary`. Raw answers and grader reasoning: `npx promptfoo view`. To use a model or gateway other than the Anthropic API, see [the developer guide](evals/README.md#using-a-different-provider).
+### Reproducing
 
-**A note on provenance.** The runs above went through an organisation-internal gateway in front of the same Claude and GPT models, not the Anthropic or OpenAI APIs directly. That gateway's configuration has been removed from this repo so the eval stays provider-agnostic, which means the shipped config (`promptfooconfig.yaml`, pointing at the Anthropic API) has not itself produced the numbers above. The model, prompts, cases, checks and grader are identical; only the transport differs. Expect the same picture, not the same digits.
+`cd evals && npm run preflight && npx promptfoo eval --repeat 3 && npm run summary`. Raw answers and grader reasoning: `npx promptfoo view`. To use a model or gateway other than the Anthropic API, see [the developer guide](evals/README.md#using-a-different-provider).
+
+**A note on provenance.** All runs above went through an organisation-internal gateway in front of the same Claude and GPT models, not the Anthropic or OpenAI APIs directly. That gateway's configuration has been removed from this repo so the eval stays provider-agnostic, which means the shipped config (`promptfooconfig.yaml`, pointing at the Anthropic API) has not itself produced the numbers above. The model, prompts, cases, checks and grader are identical; only the transport differs. Expect the same picture, not the same digits.
 
 ## Status
 

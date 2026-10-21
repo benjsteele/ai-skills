@@ -89,7 +89,7 @@ providers:
       passthrough: { some_required_field: value }         # optional
 ```
 
-**Anything else.** Write a small custom provider (`file://my-provider.js`) with a `callApi(prompt, context)` method. `prompt` is the JSON message array from `prompts.js`; return `{ output, tokenUsage }` or `{ error }`. Use `require('promptfoo').cache.fetchWithCache(url, options, timeoutMs, 'json', { repeatIndex: context.repeatIndex })` for the HTTP call so responses are cached per `--repeat` index and `--no-cache` works. `canned.js` is a minimal example of the shape.
+**Anything else.** Write a small custom provider (`file://my-provider.js`) with a `callApi(prompt, context)` method. `prompt` is the JSON message array from `prompts.js`; return `{ output, tokenUsage }` or `{ error }`. For caching, use `await context.getCache()` (the evaluator's own cache: it honours `--no-cache` and `promptfoo cache clear`) with a key that includes `context.repeatIndex`, so each `--repeat` sample is independent; skip the lookup when `context.bustCache` is set. Don't `require('promptfoo').cache` inside a provider: the CLI runs the ESM build and your provider gets the CJS build, so they hold separate cache state and `--no-cache` won't reach yours. `canned.js` is a minimal example of the shape.
 
 When you change either model:
 
