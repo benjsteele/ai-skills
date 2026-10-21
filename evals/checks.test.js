@@ -31,6 +31,16 @@ test('apostrophes do not open a quotation', () =>
   pass(quotesVerbatim("The library's notice doesn't give the library's weekend times.", ctx)));
 test('checks each side of an ellipsis', () => pass(citesSource('"From 1 March 2025 … extended from 6pm to 8pm"', ctx)));
 test('ignores short scare quotes', () => pass(quotesVerbatim('Hours are "unchanged" per the notice.', ctx)));
+test('ignores a contrasted alternative wording under 5 words', () =>
+  pass(quotesVerbatim('It says "extended", not "cut back to 5pm".', ctx)));
+test('a short verbatim quotation still counts as a citation', () =>
+  pass(citesSource('It says "opening hours are unchanged" for weekends.', ctx)));
+test('a labelled blockquote cites the inner quotation, not the label', () =>
+  pass(citesSource('> Source: "Weekend opening hours are unchanged."', ctx)));
+test('ignores a blockquoted formula', () =>
+  pass(quotesVerbatim('> Growth % = (2024 revenue − 2023 revenue) ÷ 2023 revenue × 100', ctx)));
+test('still rejects an invented quotation of 5+ words', () =>
+  fail(quotesVerbatim('It says "closes at 6pm on Fridays".', ctx)));
 test('ignores prescribed phrases', () => pass(quotesVerbatim('“Unverified — no source provided.”', ctx)));
 test("ignores echoes of the user's question", () =>
   pass(quotesVerbatim('You said "I am fairly certain it closes at 6pm" but that is not right.', ctx)));
