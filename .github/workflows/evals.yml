@@ -25,6 +25,6 @@ jobs:
           for c in promptfooconfig.yaml grader-check.yaml preflight.yaml promptfooconfig.adversarial.yaml; do
             npx promptfoo validate -c "$c"
           done
-      # The prompt loaders must build without a provider.
+      # The prompt loaders and the provider template must build without a provider.
       - run: |
-          node -e "require('./prompts.js'); require('./grader-check.js'); require('./preflight.js'); console.log('loaders ok')"
+          node -e "require('./prompts.js'); require('./grader-check.js'); require('./preflight.js'); require('./ai-provider-endpoint.js'); console.log('loaders ok')"

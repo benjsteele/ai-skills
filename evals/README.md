@@ -89,7 +89,19 @@ providers:
       passthrough: { some_required_field: value }         # optional
 ```
 
-**Anything else.** Write a small custom provider (`file://my-provider.js`) with a `callApi(prompt, context)` method. `prompt` is the JSON message array from `prompts.js`; return `{ output, tokenUsage }` or `{ error }`. For caching, use `await context.getCache()` (the evaluator's own cache: it honours `--no-cache` and `promptfoo cache clear`) with a key that includes `context.repeatIndex`, so each `--repeat` sample is independent; skip the lookup when `context.bustCache` is set. Don't `require('promptfoo').cache` inside a provider: the CLI runs the ESM build and your provider gets the CJS build, so they hold separate cache state and `--no-cache` won't reach yours. `canned.js` is a minimal example of the shape.
+**Anything else.** Copy `ai-provider-endpoint.js`, rename it, and fill in its three marked sections: request body, request headers, response parsing. The rest (caching, error shaping, token accounting) is already correct and unit-tested. Point `providers.yaml` at it:
+
+```yaml
+- id: file://my-endpoint.js
+  label: my-model
+  config:
+    url: https://your-endpoint.example.com/v1/models/<model>/generate
+    apiKeyEnvar: MY_ENDPOINT_KEY
+    model: <model>
+    maxTokens: 4000
+```
+
+If you write one from scratch instead: `callApi(prompt, context)` receives the JSON message array from `prompts.js` and must return `{ output, tokenUsage }` or `{ error }`. For caching, use `await context.getCache()` (the evaluator's own cache: it honours `--no-cache` and `promptfoo cache clear`) with a key that includes `context.repeatIndex`, so each `--repeat` sample is independent; skip the lookup when `context.bustCache` is set. Don't `require('promptfoo').cache` inside a provider: the CLI runs the ESM build and your provider gets the CJS build, so they hold separate cache state and `--no-cache` won't reach yours.
 
 When you change either model:
 
@@ -228,9 +240,10 @@ Some cases encode one reading of `CLAUDE.md` where the instructions are open to 
 | `cases.yaml` | The 26 cases and their checks. |
 | `prompts.js` | Builds the messages for each version, including the earlier exchange for two-turn cases. Reads `../CLAUDE.md` and `../prompts/accuracy-first-short.md`. |
 | `checks.js` | Code checks: quotations are verbatim, the source is cited, prescribed phrases and labels are used. |
-| `checks.test.js`, `summary.test.js` | Unit tests (`npm test`). |
+| `checks.test.js`, `summary.test.js`, `ai-provider-endpoint.test.js` | Unit tests (`npm test`). |
 | `grader.yaml` | Grader model settings, shared by both configs. |
 | `grader-check.yaml`, `grader-check.js`, `canned.js` | Grader calibration against known answers. |
+| `ai-provider-endpoint.js` | Template for a custom provider against any HTTP endpoint; fill in body, headers and response parsing. |
 | `summary.js` | Per-version scores, confidence intervals, tokens and cost (`npm run summary`). `GRADER_MODEL` env var selects the grader's price row. |
 | `preflight.yaml`, `preflight.js` | One cheap call per case, no grader: finds cases your provider refuses before a full run (`npm run preflight`). |
 | `cases-adversarial.yaml`, `promptfooconfig.adversarial.yaml` | Opt-in overt prompt-injection and verbatim-reproduction cases (`npm run adversarial`). |
